@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+
+# uv
+# (uv.lock IS committed; the cache is not)
+.uv/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# OS
+.DS_Store
+
+# Editors
+.idea/
+.vscode/
+
+# --- Project data & artifacts (never commit raw video, datasets, or checkpoints) ---
+data/raw/
+data/interim/
+data/processed/
+models/
+!models/.gitkeep
+artifacts/reports/
+artifacts/overlays/
+artifacts/experiments/
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.pt
+*.pth
+*.onnx
+*.db
+*.sqlite
+*.sqlite3

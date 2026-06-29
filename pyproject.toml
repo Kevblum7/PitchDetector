@@ -1,0 +1,68 @@
+[project]
+name = "pitch-tip-detector"
+version = "0.1.0"
+description = "Local-first video analysis tool to detect potential MLB pitch tipping (research/coaching aid)."
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.7",
+    "sqlmodel>=0.0.14",
+    # numpy < 2: has an Intel-mac wheel and matches torch 2.2.2's build (numpy 2.x
+    # triggers a "Failed to initialize NumPy" warning from torch).
+    "numpy<2",
+    # torch 2.2.2 is the last release with x86_64 macOS (Intel) wheels.
+    "torch==2.2.2",
+]
+
+[project.optional-dependencies]
+# OpenCV is needed from Milestone 3 onward (video/pose), not for the health +
+# diagnostics foundation. It is optional because there is no prebuilt OpenCV
+# wheel for Intel macOS in this environment, so installing it compiles from
+# source (slow). Keeping it out of the default `uv sync` keeps the core
+# workflow fast and reliable. Install with: `uv sync --extra video`.
+# The diagnostics module imports cv2 lazily and reports it as unavailable when
+# absent, so the app runs without it.
+video = [
+    "opencv-python-headless>=4.9",
+]
+
+[dependency-groups]
+# Installed by default on `uv sync` (uv installs the `dev` group automatically).
+dev = [
+    "pytest>=8.0",
+    "httpx>=0.27",
+    "ruff>=0.5",
+    "mypy>=1.10",
+]
+
+[project.scripts]
+pitch-diagnostics = "scripts.diagnostics:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["backend", "scripts"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["data", "models", "artifacts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "W"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_configs = true
+warn_redundant_casts = true
+disallow_untyped_defs = true
+ignore_missing_imports = true
+files = ["backend", "scripts"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
