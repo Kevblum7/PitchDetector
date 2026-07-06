@@ -33,6 +33,9 @@ htmlcov/
 .idea/
 .vscode/
 
+# Claude Code local (user-specific) settings
+.claude/settings.local.json
+
 # --- Project data & artifacts (never commit raw video, datasets, or checkpoints) ---
 data/raw/
 data/interim/

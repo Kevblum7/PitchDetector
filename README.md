@@ -5,16 +5,17 @@ Local-first video analysis tool to investigate whether an MLB pitcher may be
 surfaces *potential* visual tells with supporting evidence, not definitive
 accusations. See [`CLAUDE.md`](./CLAUDE.md) for the full product spec.
 
-> **Status: Milestone 1** — project foundation only. This milestone delivers a
-> FastAPI app with a health check and an environment-diagnostics endpoint plus
-> CLI. No ML, pose estimation, video processing, or frontend yet.
+> **Status: Milestone 2** — health + diagnostics (M1) plus SQLite-backed
+> pitcher/video/clip ingestion and manual labeling over a v1 API (M2). Clip
+> windows are leakage-safe (no frame at/after release enters the model window).
+> No ML, pose estimation, or frontend yet.
 
 ## Requirements
 
 - **Python 3.11** (the project targets `>=3.11,<3.12`).
 - [`uv`](https://docs.astral.sh/uv/) for environment and dependency management.
-- **FFmpeg** on your `PATH` (needed later for video ingestion; the diagnostics
-  report whether it is available).
+- **FFmpeg** on your `PATH` — `ffprobe` is used to extract video metadata; the
+  diagnostics report whether it is available.
 
 ### Hardware notes (Intel Mac target)
 
@@ -72,11 +73,48 @@ Then:
 - Diagnostics:  <http://127.0.0.1:8000/api/v1/system/diagnostics>
 - Interactive docs: <http://127.0.0.1:8000/docs>
 
+On startup the app creates a SQLite database at `data/pitchdetector.db`
+(override with `PITCH_DATABASE_URL`).
+
 ### Environment diagnostics (CLI)
 
 ```bash
 uv run python scripts/diagnostics.py          # human-readable
 uv run python scripts/diagnostics.py --json    # machine-readable JSON
+```
+
+### Ingestion & labeling API (Milestone 2)
+
+Videos are **registered by local path** (the original file is preserved in
+place — no upload/copy). All endpoints are under `/api/v1`:
+
+| Method & path | Purpose |
+|---|---|
+| `POST /pitchers`, `GET /pitchers`, `GET /pitchers/{id}` | Manage pitchers (projects) |
+| `POST /videos` | Register a local video by path; extracts ffprobe metadata + checksum (deduplicates identical content) |
+| `GET /videos/{id}`, `GET /videos/{id}/clips` | Read a video / list its clips |
+| `POST /videos/{id}/clips` | Create a clip: mark release frame, set the guard, label the pitch type |
+| `GET /clips/{id}`, `PATCH /clips/{id}` | Read / update a clip (frame changes re-validate the leak-free window) |
+
+**Leakage safety:** a clip stores `pre_release_end_frame = release_frame -
+release_guard_frames` (guard ≥ 1). The model window is `[start_frame,
+pre_release_end_frame]`; the clip's `end_frame` can never extend past that
+cutoff, so no frame at or after release can enter the window.
+
+Example:
+
+```bash
+curl -X POST localhost:8000/api/v1/pitchers \
+  -H 'content-type: application/json' \
+  -d '{"name":"Zack Wheeler","throws":"R"}'
+
+curl -X POST localhost:8000/api/v1/videos \
+  -H 'content-type: application/json' \
+  -d '{"pitcher_id":1,"file_path":"/abs/path/game.mp4","game_id":"2024-06-01"}'
+
+curl -X POST localhost:8000/api/v1/videos/1/clips \
+  -H 'content-type: application/json' \
+  -d '{"start_frame":0,"release_frame":120,"release_guard_frames":3,"pitch_type":"slider"}'
 ```
 
 ## Development checks
@@ -88,16 +126,29 @@ uv run ruff format --check .     # formatting (use `ruff format .` to fix)
 uv run mypy backend              # type-check
 ```
 
-## Project layout (Milestone 1)
+## Project layout
 
 ```text
 backend/app/
-  main.py               # FastAPI app + /health
-  core/config.py        # app name/version/env
-  core/diagnostics.py   # environment probing (FFmpeg/OpenCV/PyTorch)
-  api/v1/system.py      # GET /api/v1/system/diagnostics
-scripts/diagnostics.py  # CLI wrapper for diagnostics
-tests/                  # health + diagnostics + arch/ffmpeg unit tests
-docs/progress.md        # implementation checklist
+  main.py                    # FastAPI app, router wiring, DB-init lifespan
+  core/config.py             # app metadata, storage/DB config, leakage defaults
+  core/diagnostics.py        # environment probing (FFmpeg/OpenCV/PyTorch)
+  core/enums.py              # pitch type, handedness, quality status, ...
+  db/models.py               # SQLModel tables: Pitcher, SourceVideo, PitchClip
+  db/session.py              # engine + get_session dependency + init_db
+  schemas/requests.py        # Pydantic request bodies (typed API boundary)
+  services/
+    clip_frames.py           # leakage-safe clip windowing (pure)
+    checksum.py              # SHA-256 for duplicate detection
+    video_metadata.py        # ffprobe wrapper
+    video_files.py           # local video path validation
+  api/v1/
+    system.py                # GET /api/v1/system/diagnostics
+    pitchers.py  videos.py  clips.py
+scripts/diagnostics.py       # CLI wrapper for diagnostics
+tests/
+  unit/                      # clip frames, checksum, ffprobe, path validation
+  integration/               # pitcher -> video -> clip end-to-end flow
+  test_health.py test_diagnostics.py
+docs/progress.md             # implementation checklist
 ```
-# PitchDetector

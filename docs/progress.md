@@ -40,9 +40,46 @@ full roadmap.
 - CUDA/MPS branches of the diagnostics are covered by unit tests but not
   exercised on this Intel-Mac hardware.
 
-## Next: Milestone 2 — Video ingestion and manual labeling
+## Milestone 2 — Video ingestion and manual labeling (backend) ✅
 
-- [ ] Video import + `ffprobe` metadata extraction.
-- [ ] Clip creation with manual release-frame selection.
-- [ ] Pitch label form + clip metadata persistence (SQLite).
-- [ ] Frame-accurate preview.
+- [x] SQLite persistence via SQLModel: `Pitcher`, `SourceVideo`, `PitchClip`
+      tables (`backend/app/db/models.py`), all clip frame fields stored
+      release-relative. Engine/session in `backend/app/db/session.py`; tables
+      created on app startup via lifespan.
+- [x] `ffprobe` metadata extraction (`services/video_metadata.py`): width,
+      height, fps, duration, frame count — `subprocess.run` with an arg list,
+      typed errors for missing/failed ffprobe.
+- [x] Video registration by local path (no upload/copy; original preserved),
+      with path validation (`services/video_files.py`) and SHA-256 checksum
+      (`services/checksum.py`) for duplicate detection.
+- [x] Leakage-safe clip windowing (`services/clip_frames.py`): `pre_release_end_
+      frame = release_frame - guard`, guard >= 1, end never past the cutoff, so
+      no frame at/after release enters the model window. Re-validated on PATCH.
+- [x] API (v1): `POST/GET /pitchers`, `POST/GET /videos`, `GET /videos/{id}/clips`,
+      `POST /videos/{id}/clips`, `GET/PATCH /clips/{id}`.
+- [x] Tests (37 total): clip-frame math + leakage, checksum/dedupe, ffprobe
+      parse + missing-ffprobe, path validation, and an end-to-end integration
+      flow (pitcher → video → clip → reload → update) using a synthetic ffmpeg
+      fixture (no private footage).
+- [x] Verified: ruff, ruff format, `mypy backend`, pytest, and a live server
+      smoke test (create pitcher → register video → create/reload/patch clip →
+      leakage guard returns 400).
+
+### Milestone 2 decisions / limitations
+
+- **Videos are registered by path, not uploaded.** Fits the local-first, "video
+  already acquired" model and avoids copying large files. Multipart upload can
+  be added later.
+- **"Project" maps to `Pitcher`**; endpoints live under `/api/v1/pitchers`.
+- **Frame-accurate preview and the labeling UI are frontend work** — deferred
+  with the rest of the React UI (Milestone 3+). The API fully supports the
+  underlying operations.
+- Two schema fields extend the minimal spec for reproducibility:
+  `SourceVideo.frame_count` and `PitchClip.release_guard_frames`.
+
+## Next: Milestone 3 — Pitcher crop and pose
+
+- [ ] Manual initial pitcher box + tracking across pre-release frames.
+- [ ] Pose extraction (CPU-compatible estimator) + `PoseFrame` persistence.
+- [ ] Pose visualization + quality checks.
+- [ ] Install OpenCV (`uv sync --extra video`) for frame decoding.
