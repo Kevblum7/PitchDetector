@@ -6,15 +6,15 @@ cleanly over the API.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class Handedness(str, Enum):
+class Handedness(StrEnum):
     LEFT = "L"
     RIGHT = "R"
 
 
-class PitchType(str, Enum):
+class PitchType(StrEnum):
     FOUR_SEAM = "four_seam_fastball"
     SINKER = "sinker"
     SLIDER = "slider"
@@ -24,23 +24,23 @@ class PitchType(str, Enum):
     SPLITTER = "splitter"
 
 
-class DeliveryType(str, Enum):
+class DeliveryType(StrEnum):
     WINDUP = "windup"
     STRETCH = "stretch"
 
 
-class BatterSide(str, Enum):
+class BatterSide(StrEnum):
     LEFT = "L"
     RIGHT = "R"
 
 
-class QualityStatus(str, Enum):
+class QualityStatus(StrEnum):
     PENDING = "pending"
     USABLE = "usable"
     REJECTED = "rejected"
 
 
-class LabelSource(str, Enum):
+class LabelSource(StrEnum):
     MANUAL = "manual"
     STATCAST = "statcast"
     IMPORTED = "imported"

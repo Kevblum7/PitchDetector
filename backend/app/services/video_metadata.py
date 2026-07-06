@@ -135,7 +135,7 @@ def _resolve_frame_count(stream: dict, fps: float, duration_seconds: float) -> i
         raw = stream.get(key)
         if raw not in (None, "", "N/A"):
             try:
-                return int(raw)
+                return int(str(raw))
             except (ValueError, TypeError):
                 pass
     if fps > 0 and duration_seconds > 0:

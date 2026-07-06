@@ -71,8 +71,7 @@ def build_clip_window(
         raise ClipFrameError(f"start_frame must be >= 0, got {start_frame}")
     if release_frame < 0 or release_frame >= video_frame_count:
         raise ClipFrameError(
-            f"release_frame {release_frame} must be within the video "
-            f"[0, {video_frame_count - 1}]"
+            f"release_frame {release_frame} must be within the video [0, {video_frame_count - 1}]"
         )
 
     pre_release_end_frame = compute_pre_release_end_frame(release_frame, release_guard_frames)
@@ -88,9 +87,7 @@ def build_clip_window(
         end_frame = pre_release_end_frame
 
     if end_frame < start_frame:
-        raise ClipFrameError(
-            f"end_frame {end_frame} must be >= start_frame {start_frame}"
-        )
+        raise ClipFrameError(f"end_frame {end_frame} must be >= start_frame {start_frame}")
     if end_frame > pre_release_end_frame:
         raise ClipFrameError(
             f"end_frame {end_frame} extends past the pre-release cutoff "
@@ -121,8 +118,7 @@ def assert_no_post_release_leak(window: ClipWindow) -> None:
         )
     if window.end_frame >= window.release_frame:
         raise ClipFrameError(
-            f"end_frame {window.end_frame} reaches or passes release_frame "
-            f"{window.release_frame}"
+            f"end_frame {window.end_frame} reaches or passes release_frame {window.release_frame}"
         )
     if window.end_frame > window.pre_release_end_frame:
         raise ClipFrameError(

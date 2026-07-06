@@ -55,6 +55,10 @@ extend-exclude = ["data", "models", "artifacts"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "W"]
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI dependency-injection markers are meant to be called in defaults.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Body"]
+
 [tool.mypy]
 python_version = "3.11"
 warn_unused_configs = true

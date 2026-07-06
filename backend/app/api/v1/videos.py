@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlmodel import Session, select
 
 from backend.app.core.config import DEFAULT_RELEASE_GUARD_FRAMES
-from backend.app.db.models import Pitcher, PitchClip, SourceVideo
+from backend.app.db.models import PitchClip, Pitcher, SourceVideo
 from backend.app.db.session import get_session
 from backend.app.schemas.requests import ClipCreate, VideoRegister
 from backend.app.services.checksum import sha256_file
@@ -42,9 +42,7 @@ def register_video(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
     checksum = sha256_file(path)
-    existing = session.exec(
-        select(SourceVideo).where(SourceVideo.checksum == checksum)
-    ).first()
+    existing = session.exec(select(SourceVideo).where(SourceVideo.checksum == checksum)).first()
     if existing is not None:
         # Idempotent registration of identical content.
         response.status_code = status.HTTP_200_OK
@@ -91,9 +89,7 @@ def list_video_clips(video_id: int, session: Session = Depends(get_session)) -> 
     video = session.get(SourceVideo, video_id)
     if video is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"video {video_id} not found")
-    return list(
-        session.exec(select(PitchClip).where(PitchClip.source_video_id == video_id)).all()
-    )
+    return list(session.exec(select(PitchClip).where(PitchClip.source_video_id == video_id)).all())
 
 
 @router.post(

@@ -28,18 +28,28 @@ def _connect_args(url: str) -> dict[str, object]:
 
 
 def make_engine(url: str = DATABASE_URL) -> Engine:
-    """Create an engine, ensuring the parent directory of a file DB exists."""
+    """Create an engine (no filesystem side effects)."""
+    return create_engine(url, echo=False, connect_args=_connect_args(url))
+
+
+def _ensure_sqlite_dir(url: str) -> None:
+    """Create the parent directory for a file-backed SQLite DB, if needed."""
     if url.startswith("sqlite:///") and ":memory:" not in url:
         db_path = Path(url.removeprefix("sqlite:///"))
         db_path.parent.mkdir(parents=True, exist_ok=True)
-    return create_engine(url, echo=False, connect_args=_connect_args(url))
 
 
 engine: Engine = make_engine()
 
 
 def init_db(target_engine: Engine | None = None) -> None:
-    """Create all tables. Safe to call repeatedly."""
+    """Create all tables. Safe to call repeatedly.
+
+    Ensures the SQLite directory exists for the default engine (done here, at
+    app startup, rather than at import so tests never touch the real data dir).
+    """
+    if target_engine is None:
+        _ensure_sqlite_dir(DATABASE_URL)
     SQLModel.metadata.create_all(target_engine or engine)
 
 

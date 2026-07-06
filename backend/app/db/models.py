@@ -12,7 +12,7 @@ Two fields extend the minimal spec for reproducibility:
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 from sqlmodel import Field, SQLModel
 
@@ -27,7 +27,7 @@ from backend.app.core.enums import (
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class Pitcher(SQLModel, table=True):
