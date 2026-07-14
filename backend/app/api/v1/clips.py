@@ -10,10 +10,12 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
+from backend.app.core.enums import ReleaseFrameSource
 from backend.app.db.models import PitchClip, SourceVideo
 from backend.app.db.session import get_session
 from backend.app.schemas.requests import ClipUpdate
 from backend.app.services.clip_frames import ClipFrameError, build_clip_window
+from backend.app.services.pitcher_box import PitcherBoxError, apply_initial_box
 
 router = APIRouter(prefix="/api/v1/clips", tags=["clips"])
 
@@ -39,14 +41,33 @@ def update_clip(
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"clip {clip_id} not found")
 
     updates = body.model_dump(exclude_unset=True)
+    # Handled separately below: nested model, validated against video geometry.
+    updates.pop("initial_pitcher_box", None)
+
+    # Provenance rule (CLAUDE.md §9): changing the release frame without an
+    # explicit source is a manual mark, and any stale detector confidence is
+    # cleared.
+    if "release_frame" in updates and "release_frame_source" not in updates:
+        updates["release_frame_source"] = ReleaseFrameSource.MANUAL
+        updates.setdefault("release_frame_confidence", None)
+
+    needs_video = bool(_FRAME_FIELDS & updates.keys()) or body.initial_pitcher_box is not None
+    video = session.get(SourceVideo, clip.source_video_id) if needs_video else None
+    if needs_video and video is None:  # pragma: no cover - orphaned clip should not occur
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"source video {clip.source_video_id} for clip {clip_id} is missing",
+        )
+
+    if body.initial_pitcher_box is not None:
+        assert video is not None
+        try:
+            apply_initial_box(clip, body.initial_pitcher_box, video)
+        except PitcherBoxError as exc:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
     if _FRAME_FIELDS & updates.keys():
-        video = session.get(SourceVideo, clip.source_video_id)
-        if video is None:  # pragma: no cover - orphaned clip should not occur
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                f"source video {clip.source_video_id} for clip {clip_id} is missing",
-            )
+        assert video is not None
         start_frame = updates.get("start_frame", clip.start_frame)
         release_frame = updates.get("release_frame", clip.release_frame)
         guard = updates.get("release_guard_frames", clip.release_guard_frames)

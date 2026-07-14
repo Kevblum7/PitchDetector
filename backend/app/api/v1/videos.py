@@ -16,6 +16,7 @@ from backend.app.db.session import get_session
 from backend.app.schemas.requests import ClipCreate, VideoRegister
 from backend.app.services.checksum import sha256_file
 from backend.app.services.clip_frames import ClipFrameError, build_clip_window
+from backend.app.services.pitcher_box import PitcherBoxError, apply_initial_box
 from backend.app.services.video_files import VideoFileError, validate_video_path
 from backend.app.services.video_metadata import (
     FFprobeNotFoundError,
@@ -131,6 +132,8 @@ def create_clip(
         release_frame=window.release_frame,
         pre_release_end_frame=window.pre_release_end_frame,
         release_guard_frames=window.release_guard_frames,
+        release_frame_source=body.release_frame_source,
+        release_frame_confidence=body.release_frame_confidence,
         pitch_type=body.pitch_type,
         pitch_family=body.pitch_family,
         delivery_type=body.delivery_type,
@@ -141,6 +144,11 @@ def create_clip(
         label_source=body.label_source,
         notes=body.notes,
     )
+    if body.initial_pitcher_box is not None:
+        try:
+            apply_initial_box(clip, body.initial_pitcher_box, video)
+        except PitcherBoxError as exc:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     session.add(clip)
     session.commit()
     session.refresh(clip)

@@ -44,3 +44,24 @@ class LabelSource(StrEnum):
     MANUAL = "manual"
     STATCAST = "statcast"
     IMPORTED = "imported"
+
+
+class ReleaseFrameSource(StrEnum):
+    """Provenance of a clip's release frame (CLAUDE.md §9).
+
+    ``auto`` labels must never silently overwrite ``manual`` or
+    ``auto_confirmed`` ones.
+    """
+
+    MANUAL = "manual"
+    AUTO = "auto"
+    AUTO_CONFIRMED = "auto_confirmed"
+
+
+class JobStatus(StrEnum):
+    """Lifecycle of a long-running local background job (CLAUDE.md §16)."""
+
+    QUEUED = "queued"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"

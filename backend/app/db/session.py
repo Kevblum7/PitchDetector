@@ -7,7 +7,7 @@ it with a session bound to an isolated engine.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 from sqlalchemy.engine import Engine
@@ -57,3 +57,13 @@ def get_session() -> Iterator[Session]:
     """FastAPI dependency yielding a database session."""
     with Session(engine) as session:
         yield session
+
+
+def get_session_factory() -> Callable[[], Session]:
+    """FastAPI dependency returning a session *factory*.
+
+    Background tasks outlive the request-scoped session from ``get_session``,
+    so they open their own sessions. Tests override this to bind background
+    work to the isolated test engine.
+    """
+    return lambda: Session(engine)

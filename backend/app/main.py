@@ -2,7 +2,8 @@
 
 Milestone 1: health + environment diagnostics.
 Milestone 2: pitcher/video/clip registration and labeling backed by SQLite.
-No ML, pose, or frontend yet.
+Milestone 3: pitcher tracking + pose extraction + overlay rendering.
+No training or frontend yet.
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from backend.app.api.v1 import clips, pitchers, system, videos
+from backend.app.api.v1 import clips, pitchers, pose, release, system, videos
 from backend.app.core.config import APP_NAME, APP_TITLE, APP_VERSION
 from backend.app.db.session import init_db
 
@@ -30,6 +31,8 @@ app.include_router(system.router)
 app.include_router(pitchers.router)
 app.include_router(videos.router)
 app.include_router(clips.router)
+app.include_router(pose.router)
+app.include_router(release.router)
 
 
 @app.get("/health", tags=["system"])

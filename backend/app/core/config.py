@@ -25,6 +25,18 @@ DATABASE_URL = os.getenv("PITCH_DATABASE_URL", f"sqlite:///{DEFAULT_DB_PATH}")
 # Video files we are willing to register (lower-case suffixes).
 ALLOWED_VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".avi", ".m4v"}
 
+
+def artifacts_dir() -> Path:
+    """Root for generated artifacts (git-ignored). Env-resolved per call so
+    tests can redirect output without reimporting this module."""
+    return Path(os.getenv("PITCH_ARTIFACTS_DIR", "artifacts")).resolve()
+
+
+def overlays_dir() -> Path:
+    """Where rendered overlay videos are written."""
+    return artifacts_dir() / "overlays"
+
+
 # --- Leakage / clip windowing (see CLAUDE.md §9-§10) -------------------------
 
 # Frames of safety margin dropped before the release frame. Must be >= 1 so the

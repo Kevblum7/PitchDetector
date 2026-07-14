@@ -320,6 +320,8 @@ game_id
 start_frame
 end_frame
 release_frame
+release_frame_source
+release_frame_confidence
 pre_release_end_frame
 pitch_type
 pitch_family
@@ -400,7 +402,36 @@ Support:
 
 1. Manual release-frame selection.
 2. Assisted frame selection.
-3. Automatic estimation only after manual selection works reliably.
+3. Automatic release-frame labeling (see below), validated against manual
+   ground truth before bulk use.
+
+#### Automatic release-frame labeling
+
+Reduce manual labeling to review-and-confirm by detecting the release frame
+automatically:
+
+1. **Motion gate**: cheap frame differencing locates the high-motion delivery
+   window inside the clip.
+2. **Coarse-to-fine pose pass**: run pose estimation on subsampled frames in
+   that window, then densely around the best candidate (full-clip dense pose
+   is too slow on the target CPU).
+3. **Kinematic detector**: the throwing wrist reaches peak speed and forward
+   extension at release; detect that signature and emit a candidate release
+   frame plus a confidence score.
+4. **Cross-reference gate**: before auto labels are trusted at scale, they
+   must be validated against a manually labeled subset (default target:
+   at least 90% of validation clips within +/- 1 frame). Low-confidence
+   detections go to a human review queue. An automatic label must never
+   silently overwrite a manual one.
+
+Store provenance for every release frame: source (`manual`, `auto`,
+`auto_confirmed`), detector confidence, and detector version/config.
+
+**Leakage note:** the labeler must analyze release and post-release frames to
+find the release point. That is acceptable because it is labeling tooling,
+not model input — but its *outputs* define the protected cutoff, so the
+cross-reference validation and provenance records above are mandatory, and
+the release guard frames still apply on top of any auto label.
 
 For training, the default clip must end several frames before visible ball release. Make the safety margin configurable.
 
@@ -1157,7 +1188,27 @@ Acceptance:
 
 A selected clip displays a stable tracked pitcher box and skeleton across the pre-release sequence.
 
-### Milestone 4: Dataset audit and safe splits
+### Milestone 3.5: Automatic release-frame labeling
+
+Deliver:
+
+- Motion-gate delivery-window detection (frame differencing).
+- Coarse-to-fine pose sampling within the delivery window.
+- Wrist-kinematics release detector with a confidence score.
+- Release-frame provenance fields (`release_frame_source`,
+  `release_frame_confidence`) and detector version/config records.
+- Cross-reference validation report: auto labels versus a manually labeled
+  subset, with per-clip frame error.
+- Review queue: low-confidence or disagreeing clips flagged for manual
+  confirmation; auto labels never silently overwrite manual labels.
+- Batch labeling CLI/endpoint to process many clips unattended.
+
+Acceptance:
+
+On a manually labeled validation set, at least 90% of automatic release
+frames fall within +/- 1 frame of the manual mark, disagreements are surfaced
+for review rather than silently accepted, and every auto-labeled clip records
+source, confidence, and detector config.
 
 Deliver:
 

@@ -8,16 +8,23 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 
+# Make the test-support modules (video_fixture, pose_fakes) importable from
+# any test regardless of pytest's import mode.
+sys.path.insert(0, str(Path(__file__).parent))
+
 import pytest
 from fastapi.testclient import TestClient
+from release_fixture import build_delivery_video
 from sqlalchemy.engine import Engine
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
+from video_fixture import build_indexed_video
 
-from backend.app.db.session import get_session
+from backend.app.db.session import get_session, get_session_factory
 from backend.app.main import app
 
 _FFMPEG_AVAILABLE = shutil.which("ffmpeg") is not None and shutil.which("ffprobe") is not None
@@ -58,6 +65,9 @@ def client(engine: Engine) -> Iterator[TestClient]:
             yield db_session
 
     app.dependency_overrides[get_session] = _override
+    # Background tasks (pose jobs) open their own sessions; bind them to the
+    # same test engine.
+    app.dependency_overrides[get_session_factory] = lambda: lambda: Session(engine)
     try:
         yield TestClient(app)
     finally:
@@ -91,3 +101,25 @@ def synthetic_video(tmp_path_factory: pytest.TempPathFactory) -> Path:
         check=True,
     )
     return out
+
+
+@pytest.fixture(scope="session")
+def indexed_video(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """An MP4 whose frame *content* encodes its frame *index*.
+
+    See ``tests/video_fixture.py`` for the encoding scheme and constants.
+    """
+    if not _FFMPEG_AVAILABLE:
+        pytest.skip("ffmpeg/ffprobe not available")
+    return build_indexed_video(tmp_path_factory.mktemp("video") / "indexed.mp4")
+
+
+@pytest.fixture(scope="session")
+def delivery_video(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Synthetic 'pitch delivery' MP4 with a known release frame.
+
+    See ``tests/release_fixture.py`` for the trajectory and ground truth.
+    """
+    if not _FFMPEG_AVAILABLE:
+        pytest.skip("ffmpeg/ffprobe not available")
+    return build_delivery_video(tmp_path_factory.mktemp("video") / "delivery.mp4")

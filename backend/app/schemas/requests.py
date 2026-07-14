@@ -13,6 +13,7 @@ from backend.app.core.enums import (
     LabelSource,
     PitchType,
     QualityStatus,
+    ReleaseFrameSource,
 )
 
 
@@ -33,6 +34,15 @@ class VideoRegister(BaseModel):
     camera_angle: str | None = None
 
 
+class InitialPitcherBox(BaseModel):
+    """Manual initial pitcher box, in original-video pixels."""
+
+    x: int = Field(ge=0)
+    y: int = Field(ge=0)
+    width: int = Field(ge=8)
+    height: int = Field(ge=8)
+
+
 class ClipCreate(BaseModel):
     release_frame: int = Field(ge=0)
     pitch_type: PitchType
@@ -40,6 +50,10 @@ class ClipCreate(BaseModel):
     end_frame: int | None = Field(default=None, ge=0)
     # Defaults to the project-wide guard when omitted.
     release_guard_frames: int | None = Field(default=None, ge=1)
+    # Provenance of release_frame; pass "auto" (+ confidence) when the value
+    # comes from a release-detection job.
+    release_frame_source: ReleaseFrameSource = ReleaseFrameSource.MANUAL
+    release_frame_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
 
     pitch_family: str | None = None
     delivery_type: DeliveryType | None = None
@@ -49,6 +63,7 @@ class ClipCreate(BaseModel):
     quality_status: QualityStatus = QualityStatus.PENDING
     label_source: LabelSource = LabelSource.MANUAL
     notes: str | None = None
+    initial_pitcher_box: InitialPitcherBox | None = None
 
 
 class ClipUpdate(BaseModel):
@@ -58,6 +73,10 @@ class ClipUpdate(BaseModel):
     start_frame: int | None = Field(default=None, ge=0)
     end_frame: int | None = Field(default=None, ge=0)
     release_guard_frames: int | None = Field(default=None, ge=1)
+    # When release_frame is changed without an explicit source, it is treated
+    # as a manual mark. Set to "auto_confirmed" to confirm an auto label.
+    release_frame_source: ReleaseFrameSource | None = None
+    release_frame_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
 
     pitch_type: PitchType | None = None
     pitch_family: str | None = None
@@ -68,3 +87,4 @@ class ClipUpdate(BaseModel):
     quality_status: QualityStatus | None = None
     label_source: LabelSource | None = None
     notes: str | None = None
+    initial_pitcher_box: InitialPitcherBox | None = None

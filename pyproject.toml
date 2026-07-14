@@ -12,20 +12,18 @@ dependencies = [
     # numpy < 2: has an Intel-mac wheel and matches torch 2.2.2's build (numpy 2.x
     # triggers a "Failed to initialize NumPy" warning from torch).
     "numpy<2",
-    # torch 2.2.2 is the last release with x86_64 macOS (Intel) wheels.
+    # torch 2.2.2 is the last release with x86_64 macOS (Intel) wheels;
+    # torchvision 0.17.2 is its paired release. Keypoint R-CNN from torchvision
+    # is the pose estimator: MediaPipe ships no Intel-mac wheel, so this is the
+    # documented CPU-compatible fallback (CLAUDE.md §2).
     "torch==2.2.2",
-]
-
-[project.optional-dependencies]
-# OpenCV is needed from Milestone 3 onward (video/pose), not for the health +
-# diagnostics foundation. It is optional because there is no prebuilt OpenCV
-# wheel for Intel macOS in this environment, so installing it compiles from
-# source (slow). Keeping it out of the default `uv sync` keeps the core
-# workflow fast and reliable. Install with: `uv sync --extra video`.
-# The diagnostics module imports cv2 lazily and reports it as unavailable when
-# absent, so the app runs without it.
-video = [
-    "opencv-python-headless>=4.9",
+    "torchvision==0.17.2",
+    # Drawing pose overlays. (Also a torchvision dependency, declared explicitly
+    # because we import PIL directly.) OpenCV is deliberately NOT a dependency:
+    # no working Intel-mac wheel exists here (4.x is sdist-only and its source
+    # build fails; 5.x needs numpy>=2 which breaks torch 2.2.2). Video decode/
+    # encode goes through FFmpeg subprocess wrappers instead (CLAUDE.md §6).
+    "pillow>=10",
 ]
 
 [dependency-groups]
@@ -45,7 +43,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["backend", "scripts"]
+packages = ["backend", "ml", "scripts"]
 
 [tool.ruff]
 line-length = 100
@@ -65,7 +63,7 @@ warn_unused_configs = true
 warn_redundant_casts = true
 disallow_untyped_defs = true
 ignore_missing_imports = true
-files = ["backend", "scripts"]
+files = ["backend", "ml", "scripts"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
