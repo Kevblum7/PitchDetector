@@ -37,10 +37,19 @@ and a **`filmroom_url`**.
 ## Workflow
 
 1. Open each `filmroom_url` from a pitch-type manifest, and use Film Room's
-   **Download** button.
-2. Save the clip as `clips/<PITCH_TYPE>/<clip_uid>.mp4` (matching the manifest
-   row). A downloaded clip's `clip_uid` filename is how the importer ties the
-   video to its Statcast labels — no guessing from broadcast filenames.
+   **Download** button (save the files anywhere, e.g. `~/Downloads`).
+2. Run `scripts/organize_savant_clips.py` — it matches each downloaded file to
+   its pitch by the `playId` in the filename, **validates it is a real video**
+   (rejecting HTML block pages), and renames it to
+   `clips/<PITCH_TYPE>/<clip_uid>.mp4`, updating the manifest's `video_file`.
+   `--report` lists which pitches you still need, with their links:
+
+   ```bash
+   uv run python scripts/organize_savant_clips.py \
+     --manifest savant_data/devin_williams/metadata/devin_williams_2026_FF.csv \
+     --source ~/Downloads \
+     --clips-dir savant_data/devin_williams/clips/FF --report
+   ```
 3. Ingest: `scripts/import_savant.py` (next milestone) reads a manifest +
    `clips/` folder and registers each video with its Statcast labels
    (`pitch_type`, `game_pk`→`game_id`, `game_date`, `batter_side`, …,
