@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import urllib.parse
 
 import pytest
@@ -11,6 +12,8 @@ from scripts.download_savant_videos import (
     build_csv_url,
     clip_filename,
     extract_video_url,
+    game_feed_url,
+    parse_game_feed,
     parse_pitch_rows,
     video_page_url,
 )
@@ -60,22 +63,58 @@ def test_build_csv_url_requires_a_source() -> None:
         build_csv_url()
 
 
-def test_parse_pitch_rows_extracts_play_ids_and_skips_blank() -> None:
+def test_parse_pitch_rows_keys_on_game_at_bat_pitch_and_skips_incomplete() -> None:
     csv_text = (
-        "game_date,player_name,pitch_type,game_pk,play_id,des\n"
-        "2024-05-01,Williams Devin,SL,745001,aaaa-1111,Strike\n"
-        "2024-05-01,Williams Devin,FF,745001,,Ball\n"  # no play_id -> skipped
-        "2024-05-02,Williams Devin,CH,745002,bbbb-2222,In play\n"
+        "game_date,player_name,pitch_type,game_pk,at_bat_number,pitch_number,des\n"
+        "2024-05-01,Williams Devin,SL,745001,12,3,Strike\n"
+        "2024-05-01,Williams Devin,FF,745001,,4,Ball\n"  # no at_bat_number -> skipped
+        "2024-05-02,Williams Devin,CH,745002,7,1,In play\n"
     )
     rows = parse_pitch_rows(csv_text)
-    assert [r.play_id for r in rows] == ["aaaa-1111", "bbbb-2222"]
+    assert [(r.game_pk, r.at_bat_number, r.pitch_number) for r in rows] == [
+        ("745001", "12", "3"),
+        ("745002", "7", "1"),
+    ]
+    # play_id is not in the CSV; it is resolved later from the game feed.
+    assert rows[0].play_id is None
     assert rows[0].pitch_type == "SL"
     assert rows[0].game_date == "2024-05-01"
     assert rows[0].pitcher == "Williams Devin"
 
 
+def test_parse_pitch_rows_strips_utf8_bom() -> None:
+    # Savant serves the CSV with a leading BOM, which otherwise mangles the
+    # first column name and makes pitch_type unreadable.
+    csv_text = "﻿pitch_type,game_date,game_pk,at_bat_number,pitch_number\nCH,2024-07-30,745003,5,2\n"
+    rows = parse_pitch_rows(csv_text)
+    assert len(rows) == 1
+    assert rows[0].pitch_type == "CH"
+
+
 def test_parse_pitch_rows_empty() -> None:
-    assert parse_pitch_rows("game_date,play_id\n") == []
+    assert parse_pitch_rows("game_pk,at_bat_number,pitch_number\n") == []
+
+
+def test_parse_game_feed_maps_ab_and_pitch_to_play_id() -> None:
+    feed = json.dumps(
+        {
+            "team_home": [
+                {"ab_number": 1, "pitch_number": 1, "play_id": "home-1-1"},
+                {"ab_number": 1, "pitch_number": 2, "play_id": None},  # skipped
+            ],
+            "team_away": [
+                {"ab_number": 2, "pitch_number": 1, "play_id": "away-2-1"},
+            ],
+        }
+    )
+    mapping = parse_game_feed(feed)
+    assert mapping[("1", "1")] == "home-1-1"
+    assert mapping[("2", "1")] == "away-2-1"
+    assert ("1", "2") not in mapping
+
+
+def test_game_feed_url_includes_game_pk() -> None:
+    assert game_feed_url(745001) == "https://baseballsavant.mlb.com/gf?game_pk=745001"
 
 
 def test_extract_video_url_finds_mp4_source() -> None:
@@ -89,6 +128,13 @@ def test_extract_video_url_finds_mp4_source() -> None:
 
 def test_extract_video_url_none_when_absent() -> None:
     assert extract_video_url("<html><body>no video here</body></html>") is None
+
+
+def test_extract_video_url_unescapes_html_entities() -> None:
+    # Savant serves the mp4 token HTML-escaped; the trailing "==" padding
+    # appears as "&#x3D;&#x3D;" and must be decoded to a usable URL.
+    html_page = '<source src="https://sporty-clips.mlb.com/abcAw&#x3D;&#x3D;.mp4">'
+    assert extract_video_url(html_page) == "https://sporty-clips.mlb.com/abcAw==.mp4"
 
 
 def test_video_page_url_encodes_play_id() -> None:

@@ -48,13 +48,37 @@ full roadmap.
   players collapsed and injects clip links via JS only after you expand a
   player, so scraping its raw HTML finds nothing. The script instead uses the
   stable data endpoints — `/statcast_search/csv?type=details` (one row per
-  pitch, with `play_id`) → `/sporty-videos?playId=<id>` (mp4 in initial HTML).
+  pitch) → `/gf?game_pk=<pk>` per-game feed (carries `play_id`) →
+  `/sporty-videos?playId=<id>` (mp4 in initial HTML).
 - Accepts a copied browser search URL (`--search-url`, auto-rewritten to CSV)
   or explicit filters (`--player-id/--season/--pitch-type/--dates`). Supports
   `--dry-run`, `--limit`, `--delay`, `--overwrite`; writes a `manifest.json`.
-- Zero new dependencies (stdlib `urllib`/`csv`/`re`). Polite UA + delay.
-- Unit tests cover URL building, CSV parsing, mp4 extraction, filenames
-  (`tests/unit/test_download_savant_videos.py`). Network I/O is isolated.
+- Zero new dependencies (stdlib `urllib`/`csv`/`re`/`html`/`json`). Polite UA +
+  delay.
+- Unit tests cover URL building, CSV parsing, game-feed join, mp4 extraction,
+  filenames (`tests/unit/test_download_savant_videos.py`). Network I/O isolated.
+
+### Fixes verified against the live endpoint (2026-07-24)
+
+The originally-merged version resolved 0 clips against current Savant. Three
+issues were found and fixed:
+
+- **No `play_id` in the CSV.** The details CSV no longer contains a `play_id`
+  column, so every row was discarded. Now each pitch is keyed by
+  `game_pk` + `at_bat_number` + `pitch_number`, and `play_id` is looked up
+  from the `/gf?game_pk=<pk>` per-game feed (one fetch per game).
+- **UTF-8 BOM** on the CSV corrupted the first column name (`pitch_type` read
+  as empty); stripped in `parse_pitch_rows`.
+- **HTML-escaped mp4 URL.** The clip token's `==` padding is served as
+  `&#x3D;&#x3D;`; `extract_video_url` now unescapes entities.
+
+Verified: `--player-id 642207 --season 2024 --pitch-type CH` resolves 5/5
+`play_id`s and 5/5 mp4 URLs. The actual binary download of the clips is blocked
+in the sandbox — the MLB video CDN host `sporty-clips.mlb.com` is denied by the
+egress policy (403 on CONNECT). URL resolution and the manifest are unaffected;
+the download step should succeed in an environment where that host is allowed.
+(The `SL`/April-2024 empty results seen while testing are correct: Williams
+threw no sliders in 2024 and was injured that April.)
 
 ## Next: Milestone 2 — Video ingestion and manual labeling
 

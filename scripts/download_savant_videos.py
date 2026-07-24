@@ -8,15 +8,20 @@ JavaScript after you expand a player (e.g. click "Devin Williams"), so a script
 that fetches the raw HTML of that page finds **no video URLs**. That is the
 "no urls" error.
 
-This script avoids the rendered page entirely and uses the two stable data
-endpoints instead:
+This script avoids the rendered page entirely and uses stable data endpoints:
 
-1. ``/statcast_search/csv`` with ``type=details`` returns one row per pitch,
-   including a ``play_id`` UUID. No "expand the player" click is involved.
-2. ``/sporty-videos?playId=<play_id>`` is a small page whose *initial* HTML
+1. ``/statcast_search/csv`` with ``type=details`` returns one row per pitch.
+   It identifies each pitch by ``game_pk`` + ``at_bat_number`` + ``pitch_number``
+   but — importantly — the current CSV export does **not** contain the
+   ``play_id`` UUID that the video page needs.
+2. ``/gf?game_pk=<pk>`` is the per-game feed (JSON). Every pitch in it carries a
+   ``play_id`` UUID, keyed by ``ab_number`` + ``pitch_number``. We fetch this
+   once per game and join it back to the CSV rows to recover each ``play_id``.
+3. ``/sporty-videos?playId=<play_id>`` is a small page whose *initial* HTML
    contains the ``<video><source src="...mp4">`` — the downloadable clip.
 
-So the flow is: CSV -> list of ``play_id`` -> per-play mp4 URL -> download.
+So the flow is:
+CSV -> (game_pk, at_bat, pitch) -> per-game feed play_id -> mp4 URL -> download.
 
 Usage
 -----
@@ -27,10 +32,11 @@ and pass it. The script rewrites it to the CSV endpoint automatically::
         --search-url "https://baseballsavant.mlb.com/statcast_search?..." \\
         --out data/raw/devin_williams
 
-Or specify filters directly (Devin Williams = 642207)::
+Or specify filters directly. Devin Williams = 642207; note his 2024 arsenal is
+four-seam (FF) and changeup (CH), not slider::
 
     uv run python scripts/download_savant_videos.py \\
-        --player-id 642207 --season 2024 --pitch-type SL \\
+        --player-id 642207 --season 2024 --pitch-type CH \\
         --out data/raw/devin_williams
 
 Add ``--dry-run`` to resolve URLs without downloading, or ``--limit N`` to cap
@@ -49,6 +55,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import html
 import io
 import json
 import logging
@@ -58,6 +65,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -67,6 +75,7 @@ SAVANT_HOST = "https://baseballsavant.mlb.com"
 CSV_PATH = "/statcast_search/csv"
 SEARCH_PATH = "/statcast_search"
 VIDEO_PAGE = SAVANT_HOST + "/sporty-videos"
+GAME_FEED = SAVANT_HOST + "/gf"
 
 # A descriptive User-Agent; the default urllib UA is sometimes rejected.
 USER_AGENT = "PitchTipDetector/0.1 (research; local dataset ingestion)"
@@ -78,14 +87,20 @@ _MP4_RE = re.compile(r'https?://[^\s"\'<>]+?\.mp4', re.IGNORECASE)
 
 @dataclass
 class PitchRow:
-    """One pitch parsed from the Statcast details CSV (only fields we use)."""
+    """One pitch parsed from the Statcast details CSV (only fields we use).
 
-    play_id: str
-    game_date: str = ""
+    ``play_id`` is not present in the CSV; it is resolved later from the
+    per-game feed via the (``at_bat_number``, ``pitch_number``) key.
+    """
+
     game_pk: str = ""
+    at_bat_number: str = ""
+    pitch_number: str = ""
+    game_date: str = ""
     pitch_type: str = ""
     pitcher: str = ""
     des: str = ""
+    play_id: str | None = None
     video_url: str | None = None
     saved_path: str | None = None
 
@@ -165,18 +180,28 @@ def build_csv_url(
 
 
 def parse_pitch_rows(csv_text: str) -> list[PitchRow]:
-    """Parse the details CSV into rows that carry a non-empty ``play_id``."""
+    """Parse the details CSV into rows keyed by game/at-bat/pitch.
+
+    The CSV is served with a UTF-8 BOM, which otherwise corrupts the first
+    column name (``pitch_type``); it is stripped here. Rows are kept only when
+    they carry the full join key (``game_pk``, ``at_bat_number``,
+    ``pitch_number``) needed to look up the ``play_id`` from the game feed.
+    """
+    csv_text = csv_text.lstrip("﻿")
     reader = csv.DictReader(io.StringIO(csv_text))
     rows: list[PitchRow] = []
     for raw in reader:
-        play_id = (raw.get("play_id") or "").strip()
-        if not play_id:
+        game_pk = (raw.get("game_pk") or "").strip()
+        at_bat = (raw.get("at_bat_number") or "").strip()
+        pitch_number = (raw.get("pitch_number") or "").strip()
+        if not (game_pk and at_bat and pitch_number):
             continue
         rows.append(
             PitchRow(
-                play_id=play_id,
+                game_pk=game_pk,
+                at_bat_number=at_bat,
+                pitch_number=pitch_number,
                 game_date=(raw.get("game_date") or "").strip(),
-                game_pk=(raw.get("game_pk") or "").strip(),
                 pitch_type=(raw.get("pitch_type") or "").strip(),
                 pitcher=(raw.get("player_name") or "").strip(),
                 des=(raw.get("des") or "").strip(),
@@ -185,10 +210,32 @@ def parse_pitch_rows(csv_text: str) -> list[PitchRow]:
     return rows
 
 
-def extract_video_url(html: str) -> str | None:
-    """Extract the mp4 clip URL from a sporty-videos page's HTML."""
-    match = _MP4_RE.search(html)
-    return match.group(0) if match else None
+def parse_game_feed(feed_json: str) -> dict[tuple[str, str], str]:
+    """Map (``ab_number``, ``pitch_number``) -> ``play_id`` from a ``/gf`` feed.
+
+    The feed splits pitches into ``team_home`` / ``team_away`` (by batting team).
+    ``ab_number`` is sequential across the whole game, so (ab, pitch) is unique.
+    """
+    data = json.loads(feed_json)
+    mapping: dict[tuple[str, str], str] = {}
+    for side in ("team_home", "team_away"):
+        for pitch in data.get(side) or []:
+            play_id = pitch.get("play_id")
+            if not play_id:
+                continue
+            key = (str(pitch.get("ab_number")), str(pitch.get("pitch_number")))
+            mapping[key] = play_id
+    return mapping
+
+
+def extract_video_url(page_html: str) -> str | None:
+    """Extract the mp4 clip URL from a sporty-videos page's HTML.
+
+    The URL is HTML-escaped in the page (its base64 token ends with ``==``,
+    rendered as ``&#x3D;&#x3D;``), so entities are unescaped before returning.
+    """
+    match = _MP4_RE.search(page_html)
+    return html.unescape(match.group(0)) if match else None
 
 
 def video_page_url(play_id: str) -> str:
@@ -196,13 +243,21 @@ def video_page_url(play_id: str) -> str:
     return f"{VIDEO_PAGE}?playId={urllib.parse.quote(play_id)}"
 
 
+def game_feed_url(game_pk: str) -> str:
+    """Return the per-game feed URL for a given game_pk."""
+    return f"{GAME_FEED}?game_pk={urllib.parse.quote(str(game_pk))}"
+
+
 _UNSAFE = re.compile(r"[^A-Za-z0-9._-]+")
 
 
 def clip_filename(row: PitchRow) -> str:
     """Deterministic, filesystem-safe filename for a pitch clip."""
-    stem_parts = [p for p in (row.game_date, row.pitch_type, row.play_id) if p]
-    stem = "_".join(stem_parts) or row.play_id
+    ident = row.play_id or "-".join(
+        p for p in (row.game_pk, row.at_bat_number, row.pitch_number) if p
+    )
+    stem_parts = [p for p in (row.game_date, row.pitch_type, ident) if p]
+    stem = "_".join(stem_parts) or ident or "clip"
     stem = _UNSAFE.sub("-", stem).strip("-")
     return f"{stem}.mp4"
 
@@ -232,6 +287,42 @@ def download_to(url: str, dest: Path, *, timeout: float = 60.0) -> int:
     return len(data)
 
 
+def resolve_play_ids(rows: list[PitchRow], *, delay: float = 0.5) -> int:
+    """Populate ``row.play_id`` for each row using the per-game feed.
+
+    Rows are grouped by ``game_pk`` so each game feed is fetched only once.
+    Returns the number of rows for which a ``play_id`` was resolved.
+    """
+    by_game: dict[str, list[PitchRow]] = defaultdict(list)
+    for row in rows:
+        by_game[row.game_pk].append(row)
+
+    games = list(by_game.items())
+    for i, (game_pk, group) in enumerate(games, start=1):
+        try:
+            feed = parse_game_feed(fetch_text(game_feed_url(game_pk)))
+        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError) as exc:
+            logger.warning("[game %d/%d] feed failed for %s: %s", i, len(games), game_pk, exc)
+            continue
+        resolved_here = 0
+        for row in group:
+            row.play_id = feed.get((row.at_bat_number, row.pitch_number))
+            if row.play_id:
+                resolved_here += 1
+        logger.info(
+            "[game %d/%d] %s: resolved %d/%d play_ids",
+            i,
+            len(games),
+            game_pk,
+            resolved_here,
+            len(group),
+        )
+        if delay > 0 and i < len(games):
+            time.sleep(delay)
+
+    return sum(1 for row in rows if row.play_id)
+
+
 def resolve_and_download(
     rows: list[PitchRow],
     out_dir: Path,
@@ -240,12 +331,26 @@ def resolve_and_download(
     dry_run: bool = False,
     overwrite: bool = False,
 ) -> DownloadSummary:
-    """Resolve each play's mp4 URL and download it, skipping ones already saved."""
+    """Resolve each play's mp4 URL and download it, skipping ones already saved.
+
+    ``rows`` must already have ``play_id`` populated (see ``resolve_play_ids``).
+    """
     summary = DownloadSummary(csv_url="", rows=rows)
     summary.total_rows = len(rows)
-    summary.with_play_id = len(rows)
+    summary.with_play_id = sum(1 for r in rows if r.play_id)
 
     for i, row in enumerate(rows, start=1):
+        if not row.play_id:
+            summary.failed += 1
+            logger.warning(
+                "[%d/%d] no play_id for game %s ab %s pitch %s",
+                i,
+                len(rows),
+                row.game_pk,
+                row.at_bat_number,
+                row.pitch_number,
+            )
+            continue
         dest = out_dir / clip_filename(row)
         if dest.exists() and not overwrite:
             row.saved_path = str(dest)
@@ -343,14 +448,23 @@ def main(argv: list[str] | None = None) -> int:
     rows = parse_pitch_rows(csv_text)
     if not rows:
         logger.error(
-            "CSV returned 0 pitches with a play_id. Check the query (player id / "
-            "season / dates). If you passed --search-url, make sure it is a "
-            "statcast_search URL from the browser."
+            "CSV returned 0 pitches. Check the query (player id / season / dates). "
+            "If you passed --search-url, make sure it is a statcast_search URL from "
+            "the browser."
         )
         return 1
     if args.limit:
         rows = rows[: args.limit]
-    logger.info("Found %d pitches with play_id.", len(rows))
+    logger.info("Found %d pitches. Resolving play_ids via per-game feed...", len(rows))
+
+    resolved = resolve_play_ids(rows, delay=min(args.delay, 1.0))
+    if resolved == 0:
+        logger.error(
+            "Resolved 0 play_ids from the game feed(s). The feed format may have "
+            "changed, or the (at_bat_number, pitch_number) join failed."
+        )
+        return 1
+    logger.info("Resolved %d/%d play_ids.", resolved, len(rows))
 
     out_dir = Path(args.out)
     summary = resolve_and_download(
@@ -369,6 +483,7 @@ def main(argv: list[str] | None = None) -> int:
             {
                 "csv_url": summary.csv_url,
                 "total_rows": summary.total_rows,
+                "with_play_id": summary.with_play_id,
                 "resolved_video": summary.resolved_video,
                 "downloaded": summary.downloaded,
                 "skipped_existing": summary.skipped_existing,
@@ -379,14 +494,15 @@ def main(argv: list[str] | None = None) -> int:
         )
     )
     logger.info(
-        "Done. resolved=%d downloaded=%d skipped=%d failed=%d -> %s",
+        "Done. play_ids=%d resolved=%d downloaded=%d skipped=%d failed=%d -> %s",
+        summary.with_play_id,
         summary.resolved_video,
         summary.downloaded,
         summary.skipped_existing,
         summary.failed,
         manifest,
     )
-    return 0 if summary.failed == 0 or summary.downloaded or summary.skipped_existing else 1
+    return 0 if summary.downloaded or summary.skipped_existing or summary.resolved_video else 1
 
 
 if __name__ == "__main__":
