@@ -39,6 +39,7 @@ dev = [
 
 [project.scripts]
 pitch-diagnostics = "scripts.diagnostics:main"
+savant-download = "scripts.download_savant_videos:main"
 
 [build-system]
 requires = ["hatchling"]

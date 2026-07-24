@@ -40,6 +40,22 @@ full roadmap.
 - CUDA/MPS branches of the diagnostics are covered by unit tests but not
   exercised on this Intel-Mac hardware.
 
+## Data ingestion helper — Baseball Savant downloader
+
+- [x] `scripts/download_savant_videos.py` — local research helper to pull a
+      single pitcher's clips from Baseball Savant.
+- Fixes the "no urls" error: the `/statcast_search` *results page* renders
+  players collapsed and injects clip links via JS only after you expand a
+  player, so scraping its raw HTML finds nothing. The script instead uses the
+  stable data endpoints — `/statcast_search/csv?type=details` (one row per
+  pitch, with `play_id`) → `/sporty-videos?playId=<id>` (mp4 in initial HTML).
+- Accepts a copied browser search URL (`--search-url`, auto-rewritten to CSV)
+  or explicit filters (`--player-id/--season/--pitch-type/--dates`). Supports
+  `--dry-run`, `--limit`, `--delay`, `--overwrite`; writes a `manifest.json`.
+- Zero new dependencies (stdlib `urllib`/`csv`/`re`). Polite UA + delay.
+- Unit tests cover URL building, CSV parsing, mp4 extraction, filenames
+  (`tests/unit/test_download_savant_videos.py`). Network I/O is isolated.
+
 ## Next: Milestone 2 — Video ingestion and manual labeling
 
 - [ ] Video import + `ffprobe` metadata extraction.
