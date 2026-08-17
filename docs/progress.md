@@ -56,9 +56,55 @@ full roadmap.
 - Unit tests cover URL building, CSV parsing, mp4 extraction, filenames
   (`tests/unit/test_download_savant_videos.py`). Network I/O is isolated.
 
-## Next: Milestone 2 — Video ingestion and manual labeling
+## Milestone 2 — Video ingestion and manual labeling ✅ (backend)
 
-- [ ] Video import + `ffprobe` metadata extraction.
-- [ ] Clip creation with manual release-frame selection.
-- [ ] Pitch label form + clip metadata persistence (SQLite).
-- [ ] Frame-accurate preview.
+- [x] Video import + `ffprobe` metadata extraction
+      (`services/video_metadata.py`, `POST /api/v1/videos`).
+- [x] Checksum-based duplicate detection; idempotent re-registration.
+- [x] Clip creation with manual release-frame selection and leakage-safe
+      windowing (`services/clip_frames.py`, `POST /api/v1/videos/{id}/clips`).
+- [x] Pitch label fields + clip metadata persistence in SQLite
+      (`db/models.py`, `PATCH /api/v1/clips/{id}`).
+- [x] Pitcher (project) CRUD (`api/v1/pitchers.py`).
+- Remaining for a full UI slice: frame-accurate browser preview (frontend,
+  deferred with the rest of the React app).
+
+## Milestone 4 (partial) — Safe splits and dataset audit ✅ (pure-Python core)
+
+Implemented ahead of Milestone 3 because it is dependency-free (no OpenCV/torch)
+and addresses the project's stated #1 risk — data leakage (CLAUDE.md §10).
+
+- [x] `ml/datasets/records.py` — `ClipRecord`, a leak-free projection of a
+      `PitchClip` carrying only fields safe for splitting/auditing.
+- [x] `ml/datasets/splits.py` — game-grouped, seeded, reproducible
+      train/val/test splitting. Whole games are assigned to one split so no
+      game crosses splits. `split_by_game` re-runs the leakage assertions on
+      its own output before returning.
+- [x] Leakage guards (the §18 leakage tests assert against these):
+      `assert_no_game_overlap`, `assert_no_clip_overlap`,
+      `assert_no_duplicate_source_across_splits`,
+      `assert_label_not_in_feature_names`.
+- [x] `ml/datasets/audit.py` — counts by pitch type / game / (game, pitch) /
+      camera angle, duplicate-source detection, class-imbalance ratio, and
+      configurable sufficiency warnings (`AuditThresholds`, CLAUDE.md §14).
+- [x] Unit tests: `tests/unit/test_splits.py`, `tests/unit/test_audit.py`.
+- [x] `ml` added to `mypy` files and the hatch wheel packages.
+
+### Environment note (2026-08-17, web session)
+
+- This web session's network policy **blocks PyPI egress** (gateway returns 403
+  to CONNECT for `pypi.org` / `files.pythonhosted.org`), so `uv sync`, `pytest`,
+  `ruff`, and `mypy` cannot install/run here. The full suite was last verified
+  on the dev Mac.
+- The new `ml/datasets` code is pure stdlib. It was verified in-session by
+  running an equivalent assertion script under the base interpreter:
+  `PYTHONPATH=. .venv/bin/python <script>` → **26 checks passed**. All new
+  files byte-compile and are within the 100-char line limit.
+- To run the committed pytest suite (once PyPI is reachable):
+  `uv sync && uv run pytest tests/unit/test_splits.py tests/unit/test_audit.py`.
+
+## Next
+
+- [ ] Milestone 3 — pitcher crop + pose (needs the optional `video`/OpenCV
+      extra; blocked in web sessions without PyPI access).
+- [ ] Wire the audit into an API endpoint / dataset-audit screen.
