@@ -1,0 +1,46 @@
+# One pitcher, one season. Change these to run a different pitcher.
+pitcher:
+  name: Zack Wheeler
+  mlbam_id: 554430
+  throws: R
+  team: PHI
+season: 2024
+start_date: 2024-03-28
+end_date: 2024-09-30
+# Target is binary: fastball family vs. everything else ("offspeed").
+fastball_types: [FF, SI, FC]
+
+data_dir: data      # downloaded clips, pose, features (git-ignored)
+cache_dir: cache    # raw HTTP cache (git-ignored)
+
+sample:
+  pitches_per_game: 10   # ~10 per start across the season -> many game groups
+  max_pitches: 320
+  seed: 7
+
+network:
+  min_interval_s: 1.5    # at most one request per 1.5 s to Baseball Savant
+
+video:
+  preferred_feed: pitcher_team
+  try_other_feed: true
+
+window:
+  guard_frames: 3
+
+pose:
+  backend: mediapipe
+  model_complexity: 1
+  # Label-blind QC on the 30-frame feature window (see docs/pose_qc.md)
+  good_visibility: 0.3        # wrists inside the glove legitimately score low "visibility"
+  min_good_frame_share: 0.5
+  max_hand_speed: 0.10        # torso lengths / frame; a held set is still
+  max_missing_share: 0.25
+  min_window_frames: 15
+
+eval:
+  n_bootstrap: 2000
+  n_permutations: 200
+  alpha: 0.05
+  n_splits: 5
+  seed: 11

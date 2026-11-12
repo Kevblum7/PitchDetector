@@ -1,0 +1,21 @@
+pitch_key,expect,separation,set_start,blind,note
+745547_38_2,keep,150,,true,stretch-like side view
+745557_20_2,keep,152,,true,
+745547_12_1,exclude,,,true,CF shot begins (behind transition graphic) as hands part: no pre-separation frames
+745195_20_2,keep,149,,true,
+744799_27_6,keep,152,,false,saw detector output earlier
+745557_5_2,keep,152,,true,
+745547_18_5,keep,149,,true,
+745195_27_5,keep,148,,true,
+745545_1_1,keep,169,,true,late-aligned clip
+745525_23_5,keep,168,,true,late-aligned clip
+745195_28_3,exclude,,,true,"no CF footage: batter close-up camera, pitcher not visible"
+745538_20_4,keep,148,,true,
+745195_44_1,keep,148,,true,Busch zoomed-out CF
+745557_19_3,keep,152,,true,
+744799_42_1,exclude,,,false,CF shot starts after separation
+745538_17_4,keep,151,,true,labelled at 1-frame resolution
+745557_40_6,keep,150,,true,labelled at 1-frame resolution
+745222_8_5,keep,149,,true,T-Mobile Park offset CF camera
+745195_38_3,keep,150,,true,Busch offset CF camera
+745525_43_6,keep,170,,true,late-aligned clip

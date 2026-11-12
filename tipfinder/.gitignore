@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.env
+# Never commit downloaded data, video, pose caches, models or the real-clip test cache
+cache/
+data/
+tests/.cache/
+*.mp4
+*.npz
+*.pkl
