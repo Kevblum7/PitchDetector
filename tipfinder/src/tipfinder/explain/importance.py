@@ -71,6 +71,8 @@ def effect_size(
         d_of(pd.concat([groups[g] for g in rng.choice(games, len(games))])) for _ in range(n_boot)
     ]
     boots_arr = np.array([b for b in boots if not np.isnan(b)])
+    if len(boots_arr) == 0:
+        return d_of(df), float("nan"), float("nan")
     return d_of(df), float(np.percentile(boots_arr, 2.5)), float(np.percentile(boots_arr, 97.5))
 
 

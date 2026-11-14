@@ -145,3 +145,24 @@ def test_features_do_not_encode_broadcast_cut_position(
     later = ReleaseWindow(rw.set_start + 4, rw.separation, True)
     feats_later = build_clip_features(seq, later, GUARD)
     assert np.isnan(feats_later["time_in_set"])
+
+
+def test_set_after_tracking_dropout_counts_as_censored(
+    cache_dir: Path, ok_pitches: pd.DataFrame
+) -> None:
+    """If the set run begins right after a tracking dropout, its start was not observed:
+    it must be flagged censored (so time_in_set is NaN), not treated as a real set start."""
+    for row in ok_pitches.itertuples():
+        seq = _seq(cache_dir, row.pitch_key)
+        rw = detect_release_window(seq, WindowCfg())
+        if rw is None or rw.separation - rw.set_start < 30:
+            continue
+        kp = seq.kp.copy()
+        t_sep = int(np.where(seq.frame_idx == rw.separation)[0][0])
+        kp[t_sep - 25 : t_sep - 14] = np.nan  # 11-frame dropout inside the held set
+        cut = PoseSequence(seq.frame_idx, kp, seq.fps, seq.width, seq.height, seq.backend)
+        rw2 = detect_release_window(cut, WindowCfg())
+        assert rw2 is not None and rw2.set_censored
+        assert np.isnan(build_clip_features(cut, rw2, GUARD)["time_in_set"])
+        return
+    pytest.skip("no clip with a long enough set in cache")

@@ -14,7 +14,7 @@ from tipfinder.features.body import (
     build_leaky_features_for_control,
 )
 from tipfinder.pose.base import PoseSequence
-from tipfinder.window.release import ReleaseWindow, hand_speed
+from tipfinder.window.release import ReleaseWindow, hand_speed, torso_length
 
 log = logging.getLogger(__name__)
 
@@ -32,7 +32,9 @@ def window_quality(seq: PoseSequence, rw: ReleaseWindow, cfg: Config) -> dict:
     idx = np.where(m)[0][-MEAN_FRAMES:]
     win = PoseSequence(seq.frame_idx[idx], seq.kp[idx], seq.fps, seq.width, seq.height, "")
     share = win.good_joint_share(cfg.pose.good_visibility)
-    speed = hand_speed(seq)[idx]
+    # Torso scale from the window itself, so no post-separation frame influences QC.
+    win_scale = float(np.nanmedian(torso_length(win.kp))) if len(idx) else float("nan")
+    speed = hand_speed(seq, win_scale)[idx]
     med_speed = float(np.nanmedian(speed)) if np.any(~np.isnan(speed)) else float("nan")
     missing = float(np.mean(np.isnan(seq.kp[idx, 0, 0]))) if len(idx) else 1.0
     q = cfg.pose

@@ -202,6 +202,8 @@ def extract_all(cfg: Config, workers: int = 4, limit: int | None = None) -> pd.D
     todo = man[man["status"] == "downloaded"]
     out_path = cfg.run_dir / "extract.csv"
     done = pd.read_csv(out_path) if out_path.exists() else pd.DataFrame(columns=["pitch_key"])
+    if "status" in done:
+        done = done[done["status"] != "error"]  # errored clips are retried
     todo = todo[~todo["pitch_key"].isin(set(done["pitch_key"]))]
     if limit is not None:
         todo = todo.head(limit)

@@ -125,10 +125,12 @@ def wrist_gap_ratio(seq: PoseSequence, smooth: int = 5) -> np.ndarray:
     return _median_smooth(_fill_short_gaps(ratio, 5), smooth)
 
 
-def hand_speed(seq: PoseSequence) -> np.ndarray:
-    """Per-frame speed of the hands' midpoint in torso lengths per frame (NaN if unknown)."""
+def hand_speed(seq: PoseSequence, scale: float | None = None) -> np.ndarray:
+    """Per-frame speed of the hands' midpoint in torso lengths per frame (NaN if unknown).
+    `scale` defaults to the median torso length over `seq`."""
     hands = (seq.kp[:, J["left_wrist"], :2] + seq.kp[:, J["right_wrist"], :2]) / 2
-    scale = np.nanmedian(torso_length(seq.kp))
+    if scale is None:
+        scale = float(np.nanmedian(torso_length(seq.kp)))
     v = np.full(len(hands), np.nan)
     v[1:] = np.linalg.norm(np.diff(hands, axis=0), axis=1) / scale
     return v
@@ -169,6 +171,8 @@ def detect_release_window(
             return ReleaseWindow(
                 set_start=int(seq.frame_idx[run_start]),
                 separation=int(seq.frame_idx[t]),
-                set_censored=run_start == 0,
+                # The set start is only "observed" if the frame before it was measured with
+                # the hands apart; after a dropout or at the shot start it is censored.
+                set_censored=run_start == 0 or not measured[run_start - 1],
             )
     return None

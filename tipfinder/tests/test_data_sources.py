@@ -106,3 +106,13 @@ def test_label_never_in_feature_names() -> None:
     banned = ("pitch_type", "is_fastball", "pitch_name", "release_speed", "description", "events")
     for name in body_feature_names() + CONTEXT_FEATURES:
         assert not any(b in name for b in banned), name
+
+
+def test_sample_cap_drops_random_games_not_season_end(statcast_games: pd.DataFrame) -> None:
+    from tipfinder.data.statcast import sample_pitches
+
+    full = sample_pitches(statcast_games, 5, 10_000, seed=7)
+    capped = sample_pitches(statcast_games, 5, 5, seed=7)
+    assert capped["game_pk"].nunique() == 1
+    assert len(capped) <= 5
+    assert set(capped["game_pk"]) <= set(full["game_pk"])
