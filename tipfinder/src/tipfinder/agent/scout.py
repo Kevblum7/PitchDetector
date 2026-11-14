@@ -76,10 +76,11 @@ def run_scout(config_path: str) -> str:
         )
     from agents import Runner
 
-    metrics = tools.get_metrics(config_path)
     result = Runner.run_sync(
         build_agent(),
         f"Write the scouting report for config {config_path}.",
         max_turns=8,
     )
+    # Read the verdict AFTER the run: the agent may have re-run the pipeline via a tool.
+    metrics = tools.get_metrics(config_path)
     return enforce_verdict(str(result.final_output), bool(metrics["tip_detected"]))
