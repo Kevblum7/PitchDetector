@@ -21,6 +21,8 @@ Rules:
 - The verdict comes ONLY from the `verdict` / `tip_detected` fields. If tip_detected is
   false, the first line must be exactly "**Verdict: no detectable tip**", and any cues you
   mention must be labelled exploratory, not as a tell.
+- If positive_control_fired is false, say plainly that the result is INCONCLUSIVE: the
+  pipeline could not detect pitch type even from post-separation frames for this pitcher.
 - Explain lift as improvement over a game-context baseline (count, runners, batter hand,
   previous pitch, pitch mix) on games the model never saw.
 - Translate cues into plain scouting language (e.g. "glove sits higher before changeups").

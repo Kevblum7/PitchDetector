@@ -77,7 +77,7 @@ def run_pipeline(config_path: str, n_permutations: int | None = None) -> dict:
 
 def get_metrics(config_path: str) -> dict:
     """Compact view of the latest results.json, for reporting."""
-    from tipfinder.report import confidence_level
+    from tipfinder.report import confidence_level, control_fired
 
     cfg = load_config(PROJECT / config_path)
     res = json.loads((cfg.run_dir / "results.json").read_text())
@@ -106,6 +106,8 @@ def get_metrics(config_path: str) -> dict:
         "verdict": res["verdict"],
         "tip_detected": res["tip_detected"],
         "confidence": confidence_level(res),
+        # False => method insensitive for this pitcher; a "no tip" verdict is inconclusive.
+        "positive_control_fired": control_fired(res),
         "primary_model": res["primary_model"],
         "primary": {k: m[k] for k in keep},
         "secondary_gbm_lift": {

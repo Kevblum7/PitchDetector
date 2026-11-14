@@ -9,53 +9,57 @@ testable question:
 A "tip" means real, held-out lift over the context baseline, nothing else. If the lift isn't
 statistically distinguishable from zero, the tool says **"no detectable tip"**.
 
-## Result: Zack Wheeler, 2024 (real Statcast + real Savant broadcast video)
+## Results (real Statcast + real Savant broadcast video, 2024)
 
-**Verdict: no detectable tip.** Pre-separation body cues did not improve held-out predictions
-of fastball vs. offspeed beyond what game context already gives.
+Two Phillies starters, same pipeline and settings. 10 random pitches per start were sampled;
+all evaluation holds out whole games.
 
-| | context only | context + body | lift (log loss) | 95% CI over games |
+| | Zack Wheeler | Aaron Nola |
+|---|---|---|
+| Usable pitches / starts | 154 / 26 | 204 / 28 |
+| Fastball share (FF/SI/FC) | 69% | 67% |
+| Log-loss lift, logistic regression (95% CI over games) | −0.004 [−0.082, +0.078] | −0.092 [−0.151, −0.036] |
+| AUC, context → context+body | 0.64 → 0.68 | 0.51 → 0.46 |
+| Permutation p | 0.025 | 0.56 |
+| Shuffled-label control (mean lift) | −0.080 | −0.082 |
+| **Positive control:** AUC with post-separation frames (CI on AUC lift) | 0.64 → **0.73** [+0.01, +0.16] | 0.51 → 0.53 [−0.08, +0.10] |
+| **Verdict** | **No detectable tip** | **No detectable tip, inconclusive** |
+
+**Wheeler: no detectable tip.** His body cues before the hands break did not improve held-out
+predictions beyond game context. The permutation p of 0.025 says the real features beat
+within-game-shuffled ones, so some weak association exists, but the lift CI straddles zero.
+By the rule fixed in advance (p < 0.05 **and** lift CI above 0), that is not a tip. The
+positive control *fired*: once post-separation frames are let in, AUC rises and its CI clears
+zero. So the method could see pitch-type information here if it were there before the break.
+
+**Nola: inconclusive.** Body cues made predictions *worse* (the model pays for 26 noisy features).
+More importantly, the positive control did **not** fire: even with grip and arm-action frames
+included, pose features did not predict his pitch type. From the CF camera, MediaPipe
+keypoints don't separate Nola's fastball and knuckle-curve arm actions. A pipeline that
+can't see a known leak can't rule out a subtle tell, so the report and the agent label this
+result inconclusive rather than "no tip". Game context also barely predicts Nola (AUC 0.51),
+consistent with his reputation for throwing the curve in any count.
+
+**Release-window check (38 hand-labelled real clips).**
+
+| | labelled clips | reaching the model | detected separation vs label | cutoff after true separation |
 |---|---|---|---|---|
-| Logistic regression (primary, fixed in advance) | 0.611 | 0.621 | **−0.010** | [−0.089, +0.060] |
-| Gradient boosting | 0.681 | 0.695 | −0.014 | [−0.091, +0.065] |
+| Wheeler | 20 (17 keep, 3 exclude) | 12 | −2 to −9 frames (always early) | 0 |
+| Nola, development set | 10 | 9 | 0 to −27 frames | 0 |
+| **Nola, blind holdout** (labelled after the fix below) | 8 | 8 | −2 to −25 frames | **0** |
 
-Sample: 156 usable pitches from 26 starts (108 fastballs / 48 offspeed), held out by game.
-For reference, always guessing fastball gives log loss 0.617 and accuracy 69%.
+Running the second pitcher exposed a real leakage bug. Nola holds his hands looser in the set
+(resting wrist gap about 0.3 torso lengths vs. Wheeler's 0.1) and breaks gradually, so the
+fixed-threshold detector fired 2–5 frames late. That left 4 of 9 labelled clips with
+post-separation frames inside the model window. The fix (`refine_onset`) measures each clip's
+own set baseline and walks back to the start of the break, at most 8 frames. It can only move
+separation earlier. A fresh blind holdout labelled afterwards confirms no clip is late. Both
+pitchers were re-run with the fix; the numbers above are post-fix.
 
-**What the controls show**
-
-| run | AUC (context → +body) | accuracy | log-loss lift |
-|---|---|---|---|
-| Real pipeline (frames before hand separation only) | 0.62 → 0.67 (lift CI [−0.02, +0.12]) | 68% → 71% | −0.010 |
-| **Leakage control:** 40 post-separation frames deliberately included | 0.62 → **0.76** (lift CI [+0.05, +0.22]) | 68% → 72% | **+0.065** |
-| Shuffled labels within game (20 repeats) | — | — | −0.082 (overfitting cost of noise) |
-
-- The **leakage control** behaves as it should. Once grip and arm-action frames are allowed in,
-  AUC jumps and its CI clears zero. The pipeline *can* pick up pitch-type information when it
-  is there, and the real pipeline is shown, by test, never to see those frames.
-- The **permutation test is p = 0.01**, while the lift CI includes zero. The real body features
-  hurt the model much less than within-game-shuffled ones do (−0.010 vs. about −0.08), so some
-  weak association with pitch type exists. It isn't enough to beat game context once the
-  model pays for 26 extra features on 156 pitches. By the rule fixed in advance (p < 0.05
-  **and** lift CI above 0), that is not a tip.
-- The most important cue, exploratory only: **torso lean at the moment the hands break**.
-  Wheeler's torso leans slightly more toward the third-base side before offspeed pitches
-  (Cohen's d = +0.48, game-bootstrap CI [+0.28, +0.64]). It's consistent across games but small,
-  and it doesn't translate into better predictions here. It is a lead for a scout to look at
-  on video, not a finding.
-
-**Release-window check (20 hand-labelled real clips).** On the 12 labelled clips that reach the
-model, detected separation is within 2 frames of the label (MAE 0.6 frames at 60 fps). None is
-late enough to beat the 3-frame guard, so the model cutoff precedes the true separation in every
-case. All 3 clips labelled "should be excluded" (a batter close-up, a CF shot starting
-mid-delivery, one starting as the hands part) are rejected. The raw detector did produce
-one +16-frame late detection on a clip with noisy pose; pose QC removes it, and a test asserts
-that any late detection fails QC.
-
-**Data funnel.** 320 sampled pitches (10 per start, 32 starts) went in and 156 were usable:
-20 had no clip on Savant, 35 had no center-field shot, 20 had no full-body pitcher in it, 31 had
-no observable hand break, and 58 failed pose QC. Usable share varies a lot by park (SF, SEA,
-NYM, MIL, BOS: 0%; CIN, LAA, AZ, STL: 80–100%), largely because of camera placement.
+**Data funnel.** Wheeler: 320 sampled → 154 usable (no Savant clip 20, no CF shot 35, no
+full-body pitcher 20, no hand break found 31, pose QC 60). Nola: 320 → 204 (30 / 34 / 15 / 10 / 27).
+Usable share varies a lot by park (Wheeler at SF/SEA/NYM/MIL/BOS: 0%; Nola at MIL and PIT:
+0–10%), mostly because of camera placement.
 
 **Synthetic data.** None was used. The brief asked for results on synthetic and real data,
 but also for real data only, and the second wins: every test and every number here comes from
@@ -155,7 +159,7 @@ and the OpenAI key is read from the environment only.
 
 ## Limitations (read before trusting anything)
 
-- **Small sample.** 156 pitches / 26 games. Effects of the size a hitter could exploit could
+- **Small sample.** 154–204 pitches / 26–28 games per pitcher. Effects of the size a hitter could exploit could
   still be missed: the lift CI spans roughly ±0.08 log loss. The next step is the full season
   (~3,100 pitches, about 1,500 usable at this funnel rate), which is just `sample.pitches_per_game`.
 - **Camera angle differs across parks.** "Center field" means a different height, offset and
@@ -176,7 +180,10 @@ and the OpenAI key is read from the environment only.
   are anchored to separation for this reason, and "time in set" is used only when the set start
   is actually observed. Most sets are already under way when the CF shot begins, so this
   feature is mostly missing.
-- **One pitcher, one season.** Nothing here generalises to other pitchers without rerunning.
+- **Two pitchers, one season.** Nothing generalises to other pitchers without rerunning, and
+  as Nola shows, the method can be blind for some deliveries. Always check the positive control.
+- **Hand-labelled validation has a single annotator** (labels were made by the AI assistant
+  that built the pipeline, from 60 fps contact sheets, ±1 frame). Worth a second human pass.
 - **Correlation, not proof.** Even a significant lift would show the cue is *predictive* in
   held-out games, not that a hitter could see and use it in real time.
 

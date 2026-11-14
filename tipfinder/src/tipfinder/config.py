@@ -43,6 +43,8 @@ class WindowCfg(BaseModel):
     apart_ratio: float = 0.85  # above this (sustained) = hands separated
     sustain_frames: int = 4
     min_set_frames: int = 6
+    onset_fraction: float = 0.5  # see window.release.refine_onset
+    max_onset_backtrack: int = 8  # frames; caps how far the onset can move back
     max_set_speed: float = 0.15  # median hand speed (torso lengths/frame) during a held set
     smooth_frames: int = 5
 

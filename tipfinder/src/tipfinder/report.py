@@ -7,6 +7,25 @@ def _ci(c: list | tuple) -> str:
     return f"[{c[0]:+.4f}, {c[1]:+.4f}]"
 
 
+def control_fired(res: dict) -> bool:
+    """Did the post-separation leakage control show the pipeline CAN see pitch-type
+    information? If not, a "no tip" verdict says little: the method was insensitive."""
+    return bool(res["controls"]["post_separation_leak"]["lift_auc_ci"][0] > 0)
+
+
+def verdict_line(res: dict) -> str:
+    m = res["models"][res["primary_model"]]
+    if m["tip_detected"]:
+        return f"**Verdict: {m['verdict'].upper()}** (confidence: {confidence_level(res)})"
+    if not control_fired(res):
+        return (
+            "**Verdict: NO DETECTABLE TIP — INCONCLUSIVE.** The positive control did not fire: "
+            "even with post-separation frames included, pose features did not predict pitch type, "
+            "so this pipeline could not have detected a tip for this pitcher."
+        )
+    return "**Verdict: NO DETECTABLE TIP** (positive control fired, so the method could see a signal had there been one)"
+
+
 def confidence_level(res: dict) -> str:
     m = res["models"][res["primary_model"]]
     if not m["tip_detected"]:
@@ -26,7 +45,7 @@ def render_markdown(res: dict) -> str:
     lines = [
         f"# Tip report: {res['pitcher']['name']} ({res['season']})",
         "",
-        f"**Verdict: {m['verdict'].upper()}** (confidence: {confidence_level(res)})",
+        verdict_line(res),
         "",
         f"Sample: {m['n_pitches']} pitches from {m['n_games']} games; class balance "
         f"{m['class_balance']} (1 = fastball: {', '.join(res['fastball_types'])}).",

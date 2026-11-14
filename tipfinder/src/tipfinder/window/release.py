@@ -136,6 +136,22 @@ def hand_speed(seq: PoseSequence, scale: float | None = None) -> np.ndarray:
     return v
 
 
+def refine_onset(g: np.ndarray, run_start: int, t: int, cfg: WindowCfg) -> int:
+    """Move the separation back from the fixed-threshold crossing `t` to the onset of the
+    break. Pitchers hold their hands with different resting gaps (Wheeler ~0.1, Nola ~0.3
+    torso lengths) and some break gradually, so a fixed threshold fires late. The onset is
+    the first frame of the rising run, ending at `t`, where the gap is above
+    baseline + onset_fraction * (together_ratio - baseline); baseline = median gap of the
+    held set. Only ever moves separation EARLIER (the leakage-safe direction)."""
+    baseline = float(np.nanmedian(g[run_start:t]))
+    thr = baseline + cfg.onset_fraction * (cfg.together_ratio - baseline)
+    k = t
+    floor = max(run_start + 1, t - cfg.max_onset_backtrack)  # slow drifts: don't overshoot
+    while k - 1 >= floor and not np.isnan(g[k - 1]) and g[k - 1] >= thr:
+        k -= 1
+    return k
+
+
 def detect_release_window(
     seq: PoseSequence, cfg: WindowCfg, delivery_ratio: float = 1.2
 ) -> ReleaseWindow | None:
@@ -168,9 +184,10 @@ def detect_release_window(
             for k in range(max(0, len(apart) - cfg.sustain_frames + 1))
         )
         if sustained and ahead.max(initial=0.0) >= delivery_ratio:
+            sep = refine_onset(g, run_start, t, cfg)
             return ReleaseWindow(
                 set_start=int(seq.frame_idx[run_start]),
-                separation=int(seq.frame_idx[t]),
+                separation=int(seq.frame_idx[sep]),
                 # The set start is only "observed" if the frame before it was measured with
                 # the hands apart; after a dropout or at the shot start it is censored.
                 set_censored=run_start == 0 or not measured[run_start - 1],

@@ -1,0 +1,19 @@
+pitch_key,expect,separation,set_start,blind,note
+746458_16_1,keep,144,,true,windup; hands at chin through leg lift
+745599_43_2,keep,144,,true,
+746458_61_2,keep,144,,true,
+745424_70_5,keep,144,,true,Petco
+745588_13_4,keep,144,,true,
+745570_11_1,keep,142,,true,
+745527_44_1,keep,136,,true,
+745563_18_1,keep,149,,true,labelled at 1-frame resolution
+745540_9_4,keep,140,,true,
+747084_22_1,keep,147,,true,"Truist Park high/offset CF camera; 1-frame resolution"
+745577_19_4,keep,145,,true,holdout (labelled after onset fix)
+745574_19_5,keep,146,,true,holdout
+746116_47_5,keep,144,,true,"holdout; Dodger Stadium, small/blurry (+/-1)"
+745529_11_2,keep,145,,true,holdout
+744798_8_3,keep,148,,true,holdout
+744874_40_1,keep,144,,true,holdout
+744798_29_2,keep,140,,true,holdout
+745588_22_2,keep,145,,true,holdout

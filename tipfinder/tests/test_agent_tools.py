@@ -30,3 +30,24 @@ def test_get_metrics_without_llm() -> None:
     md = render_markdown(__import__("json").loads(results.read_text()))
     if not m["tip_detected"]:
         assert "NO DETECTABLE TIP" in md
+
+
+def test_verdict_flags_insensitive_pipeline() -> None:
+    from tipfinder.report import verdict_line
+
+    def res(tip: bool, leak_lo: float) -> dict:
+        m = {
+            "tip_detected": tip,
+            "verdict": "no detectable tip",
+            "perm_p_value": 0.5,
+            "lift_ci": [-1, 1],
+        }
+        return {
+            "primary_model": "logreg",
+            "models": {"logreg": m},
+            "controls": {"post_separation_leak": {"lift_auc_ci": [leak_lo, 0.2]}},
+        }
+
+    assert "INCONCLUSIVE" in verdict_line(res(False, -0.05))
+    assert "INCONCLUSIVE" not in verdict_line(res(False, 0.01))
+    assert "NO DETECTABLE TIP" in verdict_line(res(False, 0.01))

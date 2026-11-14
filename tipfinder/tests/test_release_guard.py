@@ -166,3 +166,22 @@ def test_set_after_tracking_dropout_counts_as_censored(
         assert np.isnan(build_clip_features(cut, rw2, GUARD)["time_in_set"])
         return
     pytest.skip("no clip with a long enough set in cache")
+
+
+def test_onset_refinement_only_moves_separation_earlier(
+    cache_dir: Path, ok_pitches: pd.DataFrame
+) -> None:
+    """refine_onset may only move the separation EARLIER than the fixed-threshold crossing,
+    and by at most max_onset_backtrack frames (the leakage-safe direction)."""
+    cfg = WindowCfg()
+    no_refine = cfg.model_copy(update={"max_onset_backtrack": 0})
+    checked = 0
+    for row in ok_pitches.itertuples():
+        seq = _seq(cache_dir, row.pitch_key)
+        a, b = detect_release_window(seq, cfg), detect_release_window(seq, no_refine)
+        if a is None or b is None:
+            continue
+        assert b.separation - cfg.max_onset_backtrack <= a.separation <= b.separation
+        assert a.set_start == b.set_start
+        checked += 1
+    assert checked > 0
