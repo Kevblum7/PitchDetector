@@ -38,13 +38,16 @@ class VideoCfg(BaseModel):
 
 
 class WindowCfg(BaseModel):
-    guard_frames: int = 3  # frames dropped before detected separation
+    # Frames dropped before detected separation. 8 (~0.13 s) covers the worst late detection
+    # seen on hand labels across four pitchers (+5 frames, slow hand break) with margin.
+    guard_frames: int = 8
     together_ratio: float = 0.55  # wrist gap / torso length below this = hands together
     apart_ratio: float = 0.85  # above this (sustained) = hands separated
     sustain_frames: int = 4
     min_set_frames: int = 6
-    onset_fraction: float = 0.5  # see window.release.refine_onset
+    onset_fraction: float = 0.25  # see window.release.refine_onset
     max_onset_backtrack: int = 8  # frames; caps how far the onset can move back
+    onset_baseline_frames: int = 20  # set frames used as the resting-gap baseline
     max_set_speed: float = 0.15  # median hand speed (torso lengths/frame) during a held set
     smooth_frames: int = 5
 
@@ -60,6 +63,11 @@ class PoseCfg(BaseModel):
     max_hand_speed: float = 0.10  # median hands speed, torso lengths/frame (sets are still)
     max_missing_share: float = 0.25
     min_window_frames: int = 15
+    # Camera-consistency gate: the broadcast CF camera is fixed within a game, so a clip whose
+    # pitcher hip position / torso size deviates from that game's median is a different shot
+    # (wide, first-base, crowd cam). Deviation is in units of (0.04 W, 0.04 H, 0.02 H).
+    max_camera_dev: float = 2.9
+    min_clips_for_camera_check: int = 3
 
 
 class EvalCfg(BaseModel):

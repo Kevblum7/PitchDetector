@@ -1,0 +1,9 @@
+pitch_key,expect,separation,set_start,blind,note
+745004_18_3,keep,147,,true,T-Mobile Park
+745004_57_6,keep,145,,true,T-Mobile Park
+745809_16_2,keep,143,,true,Citi Field
+745004_20_1,keep,147,,true,T-Mobile Park
+745789_19_1,keep,149,,true,Citi Field
+747161_12_1,keep,146,,true,
+745838_1_2,keep,145,,true,Citi Field
+746519_32_10,exclude,,,true,"NOT the CF camera: front/side angle, pitcher faces camera; passed the CF check"

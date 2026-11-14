@@ -142,11 +142,14 @@ def refine_onset(g: np.ndarray, run_start: int, t: int, cfg: WindowCfg) -> int:
     torso lengths) and some break gradually, so a fixed threshold fires late. The onset is
     the first frame of the rising run, ending at `t`, where the gap is above
     baseline + onset_fraction * (together_ratio - baseline); baseline = median gap of the
-    held set. Only ever moves separation EARLIER (the leakage-safe direction)."""
-    baseline = float(np.nanmedian(g[run_start:t]))
+    held set just before the break (onset_baseline_frames frames ending max_onset_backtrack
+    frames before `t`). Only ever moves separation EARLIER (the leakage-safe direction)."""
+    lo = max(run_start, t - cfg.onset_baseline_frames - cfg.max_onset_backtrack)
+    baseline = float(np.nanmedian(g[lo : max(lo + 1, t - cfg.max_onset_backtrack)]))
     thr = baseline + cfg.onset_fraction * (cfg.together_ratio - baseline)
     k = t
-    floor = max(run_start + 1, t - cfg.max_onset_backtrack)  # slow drifts: don't overshoot
+    # Never walk back into the minimum held set; slow drifts: cap the backtrack.
+    floor = max(run_start + cfg.min_set_frames, t - cfg.max_onset_backtrack)
     while k - 1 >= floor and not np.isnan(g[k - 1]) and g[k - 1] >= thr:
         k -= 1
     return k
@@ -185,6 +188,8 @@ def detect_release_window(
         )
         if sustained and ahead.max(initial=0.0) >= delivery_ratio:
             sep = refine_onset(g, run_start, t, cfg)
+            if sep - run_start < cfg.min_set_frames + cfg.guard_frames:
+                continue  # no frames would survive the guard: not a usable window
             return ReleaseWindow(
                 set_start=int(seq.frame_idx[run_start]),
                 separation=int(seq.frame_idx[sep]),
