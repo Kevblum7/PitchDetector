@@ -24,7 +24,10 @@ MEAN_FRAMES = 30  # "_mean": last 0.5 s before the cutoff (anchored to separatio
 # Plain-language descriptions used by the explanation layer (higher value -> phrase).
 DESCRIPTIONS: dict[str, tuple[str, str]] = {
     "hands_height": ("hands/glove set lower (farther below the shoulders)", "glove height"),
-    "hands_depth": ("hands set farther toward the third-base side of the hips (camera right)", "hands position"),
+    "hands_depth": (
+        "hands set farther toward the third-base side of the hips (camera right)",
+        "hands position",
+    ),
     "hands_gap": ("hands held less tightly together (wider gap between wrists)", "hand gap"),
     "forearm_angle": ("forearms more vertical", "glove/forearm angle"),
     "elbow_spread": ("elbows flared wider apart", "elbow flare"),

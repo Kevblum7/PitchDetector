@@ -244,7 +244,11 @@ def redetect_all(cfg: Config) -> pd.DataFrame:
         rw = detect_release_window(seq, cfg.window)
         if rw is None:
             ext.loc[i, ["status", "set_start", "separation", "set_censored", "pose_quality"]] = [
-                "no_separation", np.nan, np.nan, np.nan, np.nan
+                "no_separation",
+                np.nan,
+                np.nan,
+                np.nan,
+                np.nan,
             ]
             continue
         m = (seq.frame_idx >= rw.set_start) & (
@@ -252,7 +256,10 @@ def redetect_all(cfg: Config) -> pd.DataFrame:
         )
         win = PoseSequence(seq.frame_idx[m], seq.kp[m], seq.fps, seq.width, seq.height, "")
         ext.loc[i, ["status", "set_start", "separation", "set_censored", "pose_quality"]] = [
-            "ok", rw.set_start, rw.separation, rw.set_censored,
+            "ok",
+            rw.set_start,
+            rw.separation,
+            rw.set_censored,
             win.good_joint_share(cfg.pose.good_visibility),
         ]
     ext.to_csv(path, index=False)
